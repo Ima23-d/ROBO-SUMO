@@ -1,43 +1,49 @@
-// ===============================
-// DEFINIÇÃO DE PINOS
-// ===============================
+// =======================================
+// CONFIGURAÇÃO DE PINOS
+// =======================================
 
-// MOTORES
-int a1a = 6; 
+// Motores
+int a1a = 6;
 int a1b = 9;
-
 int b1a = 3;
 int b1b = 5;
 
-// SENSOR ULTRASSÔNICO
+// Sensor ultrassônico
 const int trig = 10;
 const int echo = 11;
 
-// SENSORES DE REFLETÂNCIA
+// Sensores de refletância (borda do ringue)
 int refle1 = 12;
 int refle2 = 13;
 
+// =======================================
+// CONFIGURAÇÃO INICIAL
+// =======================================
 void setup() {
   Serial.begin(9600);
 
-  // Configuração dos pinos dos motores
+  // Motores
   pinMode(a1a, OUTPUT);
   pinMode(a1b, OUTPUT);
   pinMode(b1a, OUTPUT);
   pinMode(b1b, OUTPUT);
 
-  // Configuração do sensor ultrassônico
+  // Sensor ultrassônico
   pinMode(trig, OUTPUT);
   pinMode(echo, INPUT);
 
-  // Configuração dos sensores de refletância
+  // Sensores de refletância
   pinMode(refle1, INPUT);
   pinMode(refle2, INPUT);
+
+  // Inicializa parado
+  parado();
+  delay(1000);
 }
 
-// ===============================
+// =======================================
 // FUNÇÕES DE MOVIMENTO
-// ===============================
+// =======================================
 void parado() {
   digitalWrite(a1a, LOW);
   digitalWrite(a1b, LOW);
@@ -59,72 +65,83 @@ void re() {
   digitalWrite(b1b, LOW);
 }
 
-void esquerdafrente() {
+void girarDireita() {
   digitalWrite(a1a, LOW);
+  digitalWrite(a1b, HIGH);
+  digitalWrite(b1a, HIGH);
+  digitalWrite(b1b, LOW);
+}
+
+void girarEsquerda() {
+  digitalWrite(a1a, HIGH);
   digitalWrite(a1b, LOW);
   digitalWrite(b1a, LOW);
   digitalWrite(b1b, HIGH);
 }
 
-void direitafrente() {
-  digitalWrite(a1a, LOW);
-  digitalWrite(a1b, HIGH);
-  digitalWrite(b1a, LOW);
-  digitalWrite(b1b, LOW);
-}
-
-void direitare() {
-  digitalWrite(a1a, HIGH);
-  digitalWrite(a1b, LOW);
-  digitalWrite(b1a, LOW);
-  digitalWrite(b1b, LOW);
-}
-
-void esquerdare() {
-  digitalWrite(a1a, LOW);
-  digitalWrite(a1b, LOW);
-  digitalWrite(b1a, HIGH);
-  digitalWrite(b1b, LOW);
-}
-
-// ===============================
-// LOOP PRINCIPAL
-// ===============================
-void loop() {
-  // ======== SENSOR ULTRASSÔNICO ========
+// =======================================
+// LEITURA DO ULTRASSÔNICO
+// =======================================
+int lerDistancia() {
   digitalWrite(trig, LOW);
   delayMicroseconds(2);
   digitalWrite(trig, HIGH);
   delayMicroseconds(10);
   digitalWrite(trig, LOW);
 
-  int duration = pulseIn(echo, HIGH);
-  int distance = duration * 0.034 / 2; // Distância em cm
+  int duracao = pulseIn(echo, HIGH);
+  int distancia = duracao * 0.034 / 2; // cm
+  return distancia;
+}
 
-  // ======== SENSORES DE REFLETÂNCIA ========
-  int valorRefle1 = digitalRead(refle1);
-  int valorRefle2 = digitalRead(refle2);
+// =======================================
+// LOOP PRINCIPAL - LÓGICA DE BATALHA
+// =======================================
+void loop() {
+  int distancia = lerDistancia();
+  int refleValor1 = digitalRead(refle1);
+  int refleValor2 = digitalRead(refle2);
 
-  // ======== LÓGICA DE CONTROLE (exemplo) ========
-  if (distance < 10) { 
-    parado(); // Para se obstáculo estiver perto
-  } else if (valorRefle1 == LOW && valorRefle2 == LOW) {
-    frente(); // Linha detectada pelos dois sensores
-  } else if (valorRefle1 == LOW && valorRefle2 == HIGH) {
-    esquerdafrente(); // Corrige para a esquerda
-  } else if (valorRefle1 == HIGH && valorRefle2 == LOW) {
-    direitafrente(); // Corrige para a direita
-  } else {
-    frente(); // Caminho livre
+  // ======= EVITAR SAIR DO RINGUE =======
+  // (Assumindo que o branco reflete mais — ou seja, HIGH = fora do ringue)
+  if (refleValor1 == HIGH || refleValor2 == HIGH) {
+    Serial.println("Borda detectada! Recuando...");
+    re();
+    delay(400);
+    if (refleValor1 == HIGH) {
+      girarDireita();
+      delay(400);
+    } else if (refleValor2 == HIGH) {
+      girarEsquerda();
+      delay(400);
+    }
   }
 
-  // Exibe informações no monitor serial
-  Serial.print("Distancia: ");
-  Serial.print(distance);
-  Serial.print(" cm | Refletância1: ");
-  Serial.print(valorRefle1);
-  Serial.print(" | Refletância2: ");
-  Serial.println(valorRefle2);
+  // ======= DETECTAR E ATACAR INIMIGO =======
+  else if (distancia > 0 && distancia < 25) { // inimigo detectado
+    Serial.print("Inimigo detectado a ");
+    Serial.print(distancia);
+    Serial.println(" cm — ATACAR!");
+    frente();
+    delay(150);
+  }
 
-  delay(100);
+  // ======= BUSCAR INIMIGO (SCANNER) =======
+  else {
+    Serial.println("Procurando inimigo...");
+    parado();
+    delay(100);
+    girarDireita();
+    delay(300);
+  }
+
+  // Exibe dados no monitor serial
+  Serial.print("Distancia: ");
+  Serial.print(distancia);
+  Serial.print(" cm | Refle1: ");
+  Serial.print(refleValor1);
+  Serial.print(" | Refle2: ");
+  Serial.println(refleValor2);
+
+  delay(50);
 }
