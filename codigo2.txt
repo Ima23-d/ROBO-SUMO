@@ -1,103 +1,78 @@
-// =======================================
-// CONFIGURAÇÃO DE PINOS
-// =======================================
+// ==============================
+// Robô Sumo — Versão Simplificada
+// ==============================
 
-// Motores
-int a1a = 6;
-int a1b = 9;
-int b1a = 3;
-int b1b = 5;
+// ---- Pinos dos motores ----
+int motorA_frente = 9;
+int motorA_tras   = 6;
+int motorB_frente = 5;
+int motorB_tras   = 3;
 
-// Sensor ultrassônico
-const int trig = 10;
-const int echo = 11;
+// ---- Sensor ultrassônico ----
+int trig = 10;
+int echo = 11;
 
-// Sensores de refletância (borda do ringue)
-int refle1 = A0;
-int refle2 = A1;
+// ---- Sensores de refletância ----
+int sensorE = A0;   // Esquerda
+int sensorD = A1;   // Direita
 
-// =======================================
-// PARÂMETROS / CALIBRAÇÃO
-// =======================================
-// Ajuste este valor conforme a sensibilidade do seu sensor e iluminação.
-// Valores típicos: 300..800. Leia valores com o Serial Monitor para calibrar.
-const int REFLEX_THRESHOLD = 600;
+// ---- Botão de início ----
+int botao = 12;
 
-// Tempo máximo (microsegundos) para pulseIn -- evita bloqueio se não houver eco
-const unsigned long PULSE_TIMEOUT = 30000UL; // 30 ms -> distancia máx ~5 m (segurança)
+// ---- Parâmetros ----
+int limite_reflex = 600;     // Limite da linha branca
+int distancia_ataque = 10;   // Distância para atacar (cm)
+int distancia_max = 120;     // Limite máximo de leitura
+int vel_max = 255;
+int vel_min = 120;
+int vel_re = 180;
 
-int button = 12;
+bool combateAtivo = false;   // Indica se o combate começou
 
-const int leitura_motor = 255;
-// =======================================
-// CONFIGURAÇÃO INICIAL
-// =======================================
-void setup() {
-  Serial.begin(9600);
+// ==============================
+// Funções básicas de movimento
+// ==============================
 
-  //butão 
-  pinMode(button, INPUT_PULLUP);
-
-  // Motores
-  pinMode(a1a, OUTPUT);
-  pinMode(a1b, OUTPUT);
-  pinMode(b1a, OUTPUT);
-  pinMode(b1b, OUTPUT);
-
-  // Sensor ultrassônico
-  pinMode(trig, OUTPUT);
-  pinMode(echo, INPUT);
-
-  // Sensores de refletância (pinos analógicos não precisam de pinMode obrigatoriamente)
-  pinMode(refle1, INPUT);
-  pinMode(refle2, INPUT);
-
-  // Inicializa parado
-  parado();
-  delay(1000);
+void parar() {
+  analogWrite(motorA_frente, 0);
+  analogWrite(motorA_tras, 0);
+  analogWrite(motorB_frente, 0);
+  analogWrite(motorB_tras, 0);
 }
 
-// =======================================
-// FUNÇÕES DE MOVIMENTO
-// =======================================
-void parado() {
-  digitalWrite(a1a, LOW);
-  digitalWrite(a1b, LOW);
-  digitalWrite(b1a, LOW);
-  digitalWrite(b1b, LOW);
+void frente(int vel) {
+  analogWrite(motorA_frente, vel);
+  analogWrite(motorA_tras, 0);
+  analogWrite(motorB_frente, vel);
+  analogWrite(motorB_tras, 0);
 }
 
-void frente() {
-  digitalWrite(a1a, LOW);
-  digitalWrite(a1b, 35);
-  digitalWrite(b1a, LOW);
-  digitalWrite(b1b, 35);
+void re(int vel) {
+  analogWrite(motorA_frente, 0);
+  analogWrite(motorA_tras, vel);
+  analogWrite(motorB_frente, 0);
+  analogWrite(motorB_tras, vel);
 }
 
-void re() {
-  digitalWrite(a1a, 35);
-  digitalWrite(a1b, LOW);
-  digitalWrite(b1a, 35);
-  digitalWrite(b1b, LOW);
+void girarDireita(int vel) {
+  analogWrite(motorA_frente, vel);
+  analogWrite(motorA_tras, 0);
+  analogWrite(motorB_frente, 0);
+  analogWrite(motorB_tras, vel);
 }
 
-void girarDireita() {
-  digitalWrite(a1a, LOW);
-  digitalWrite(a1b, 35);
-  digitalWrite(b1a, 35);
-  digitalWrite(b1b, LOW);
+void girarEsquerda(int vel) {
+  analogWrite(motorA_frente, 0);
+  analogWrite(motorA_tras, vel);
+  analogWrite(motorB_frente, vel);
+  analogWrite(motorB_tras, 0);
 }
 
-void girarEsquerda() {
-  digitalWrite(a1a, 35);
-  digitalWrite(a1b, LOW);
-  digitalWrite(b1a, LOW);
-  digitalWrite(b1b, 35);
-}
+// ==============================
+// Leitura dos sensores
+// ==============================
 
-// =======================================
-// LEITURA DO ULTRASSÔNICO
-// =======================================
+// Mede distância do inimigo
 int lerDistancia() {
   digitalWrite(trig, LOW);
   delayMicroseconds(2);
@@ -105,105 +80,110 @@ int lerDistancia() {
   delayMicroseconds(10);
   digitalWrite(trig, LOW);
 
-  // Usando timeout para evitar bloqueio indefinido
-  unsigned long duracao = pulseIn(echo, HIGH, PULSE_TIMEOUT);
-  if (duracao == 0) {
-    // sem eco detectado dentro do timeout -> retorna 0 (ou um valor que indique "sem leitura")
-    return 0;
-  }
-  int distancia = (int)(duracao * 0.034 / 2); // cm
+  long duracao = pulseIn(echo, HIGH, 30000);
+  if (duracao == 0) return 0;
+
+  int distancia = duracao * 0.034 / 2;
   return distancia;
 }
 
-
-void iniciar() {
-  delay(5000);
-  Serial.println("Botão ativado");
-  int distancia = lerDistancia();
-  int refleValor1 = analogRead(refle1);
-  int refleValor2 = analogRead(refle2);
-
-  // Converte leitura analógica em estado booleano (true = fora do ringue / refletivo)
-  bool borde1 = (refleValor1 >= REFLEX_THRESHOLD);
-  bool borde2 = (refleValor2 >= REFLEX_THRESHOLD);
-
-  // ======= EVITAR SAIR DO RINGUE =======
-  // (Assumindo que o branco/reflexão gera leitura ALTA — ajuste REFLEX_THRESHOLD conforme necessário)
-  if (borde1 || borde2) {
-    Serial.println("Borda detectada! Recuando...");
-    re();
-    delay(400);
-
-    // girar baseado em qual sensor detectou a borda
-    if (borde1 && !borde2) {
-      // sensor 1 detectou borda -> virar para a direita
-      girarDireita();
-      delay(400);
-    } else if (borde2 && !borde1) {
-      // sensor 2 detectou borda -> virar para a esquerda
-      girarEsquerda();
-      delay(400);
-    } else {
-      // ambos detectaram ou leitura simultânea -> recua e gira um pouco pra trás
-      girarDireita();
-      delay(300);
-    }
+// Faz média simples de leitura da refletância
+int lerRefletancia(int pino) {
+  long soma = 0;
+  for (int i = 0; i < 5; i++) {
+    soma += analogRead(pino);
+    delay(2);
   }
-
-  // ======= DETECTAR E ATACAR INIMIGO =======
-  else if (distancia > 5 ) { // inimigo detectado (mantive a lógica original: distancia > 5 cm)
-    Serial.print("Inimigo detectado a ");
-    Serial.print(distancia);
-    Serial.println(" cm — ATACAR!");
-    frente();
-    delay(150);
-  }
-
-  // ======= BUSCAR INIMIGO (SCANNER) =======
-  else {
-    Serial.println("Procurando inimigo...");
-    parado();
-    delay(100);
-    girarDireita();
-    delay(300);
-  }
-
-  // Exibe dados no monitor serial (valores brutos + estados)
-  Serial.print("Distancia: ");
-  if (distancia == 0) Serial.print("sem leitura");
-  else {
-    Serial.print(distancia);
-    Serial.print(" cm");
-  }
-  Serial.print(" | Refle1 raw: ");
-  Serial.print(refleValor1);
-  Serial.print(" (");
-  Serial.print(borde1 ? "fora" : "dentro");
-  Serial.print(") | Refle2 raw: ");
-  Serial.print(refleValor2);
-  Serial.print(" (");
-  Serial.print(borde2 ? "fora" : "dentro");
-  Serial.println(")");
-
-  delay(50);
-
-
-
+  return soma / 5;
 }
 
-// =======================================
-// LOOP PRINCIPAL - LÓGICA DE BATALHA
-// =======================================
-void loop() {
-  int leitura_do_button = digitalRead(button);
+// ==============================
+// Comportamento do robô
+// ==============================
 
-  if (leitura_do_button == LOW) {
-    // botão pressionado
-    Serial.println("Botão pressionado!");
-    iniciar(); // chama a função do seu robô
-  } else {
-    parado(); // fica parado se o botão não estiver pressionado
+void comportamento() {
+  int dist = lerDistancia();
+  int valE = lerRefletancia(sensorE);
+  int valD = lerRefletancia(sensorD);
+
+  bool foraE = valE >= limite_reflex;
+  bool foraD = valD >= limite_reflex;
+
+  // --- Fuga da borda ---
+  if (foraE || foraD) {
+    Serial.println("⚠️ Linha detectada! Recuando...");
+    re(vel_re);
+    delay(400);
+    if (foraE && !foraD) girarDireita(vel_re);
+    else if (foraD && !foraE) girarEsquerda(vel_re);
+    else girarDireita(vel_re);
+    delay(400);
+    parar();
+    delay(100);
+    return;
   }
+
+  // --- Ataque se o inimigo estiver próximo ---
+  if (dist > 0 && dist <= distancia_max) {
+    Serial.print("🎯 Inimigo a ");
+    Serial.print(dist);
+    Serial.println(" cm!");
+    frente(vel_max);
+    delay(150);
+    return;
+  }
+
+  // --- Procurar o inimigo ---
+  Serial.println("🔍 Procurando inimigo...");
+  girarDireita(vel_min);
+  delay(300);
+  parar();
+}
+
+// ==============================
+// Setup
+// ==============================
+void setup() {
+  Serial.begin(9600);
+
+  pinMode(botao, INPUT_PULLUP);
+  pinMode(trig, OUTPUT);
+  pinMode(echo, INPUT);
+
+  pinMode(sensorE, INPUT);
+  pinMode(sensorD, INPUT);
+
+  pinMode(motorA_frente, OUTPUT);
+  pinMode(motorA_tras, OUTPUT);
+  pinMode(motorB_frente, OUTPUT);
+  pinMode(motorB_tras, OUTPUT);
+
+  parar();
+  Serial.println("✅ Pronto! Aperte o botão para começar...");
+}
+
+// ==============================
+// Loop principal
+// ==============================
+void loop() {
+  // Espera o botão
+  if (!combateAtivo && digitalRead(botao) == LOW) {
+    Serial.println("🕒 Botão pressionado! Iniciando em 3 segundos...");
+    parar();
+
+    for (int i = 3; i > 0; i--) {
+      Serial.print("Começando em ");
+      Serial.println(i);
+      delay(1000);
+    }
+
+    Serial.println("🚀 Combate iniciado!");
+    combateAtivo = true;
+  }
+
+  // Se estiver em combate, executa comportamento
+  if (combateAtivo) comportamento();
+  else parar();
 
   delay(50);
 }
