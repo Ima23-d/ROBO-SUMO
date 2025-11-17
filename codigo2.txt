@@ -1,5 +1,5 @@
 // ==============================
-// Robô Sumo — Versão Simplificada
+// Robô Sumo — Versão Corrigida
 // ==============================
 
 // ---- Pinos dos motores ----
@@ -9,10 +9,10 @@ int motorB_frente = 5;
 int motorB_tras   = 3;
 
 // ---- Sensor ultrassônico ----
-int trig = 10;
-int echo = 11;
+int trig = 11;
+int echo = 10;
 
-// ---- Sensores de refletância ----
+// ---- Sensores de refletância QRE ----
 int sensorE = A0;   // Esquerda
 int sensorD = A1;   // Direita
 
@@ -20,17 +20,17 @@ int sensorD = A1;   // Direita
 int botao = 12;
 
 // ---- Parâmetros ----
-int limite_reflex = 600;     // Limite da linha branca
-int distancia_ataque = 10;   // Distância para atacar (cm)
-int distancia_max = 120;     // Limite máximo de leitura
+int limite_reflex = 600;     // Branco acima disso
+int distancia_ataque = 30;   // Inimigo perto
+int distancia_max = 80;      // Máximo de busca
 int vel_max = 255;
-int vel_min = 120;
+int vel_min = 140;
 int vel_re = 180;
 
-bool combateAtivo = false;   // Indica se o combate começou
+bool combateAtivo = false;
 
 // ==============================
-// Funções básicas de movimento
+// Funções básicas
 // ==============================
 
 void parar() {
@@ -72,7 +72,6 @@ void girarEsquerda(int vel) {
 // Leitura dos sensores
 // ==============================
 
-// Mede distância do inimigo
 int lerDistancia() {
   digitalWrite(trig, LOW);
   delayMicroseconds(2);
@@ -87,7 +86,6 @@ int lerDistancia() {
   return distancia;
 }
 
-// Faz média simples de leitura da refletância
 int lerRefletancia(int pino) {
   long soma = 0;
   for (int i = 0; i < 5; i++) {
@@ -98,7 +96,7 @@ int lerRefletancia(int pino) {
 }
 
 // ==============================
-// Comportamento do robô
+// Comportamento principal
 // ==============================
 
 void comportamento() {
@@ -106,43 +104,67 @@ void comportamento() {
   int valE = lerRefletancia(sensorE);
   int valD = lerRefletancia(sensorD);
 
-  bool foraE = valE >= limite_reflex;
-  bool foraD = valD >= limite_reflex;
+  bool linhaE = valE <= limite_reflex;
+  bool linhaD = valD <= limite_reflex;
 
-  // --- Fuga da borda ---
-  if (foraE || foraD) {
-    Serial.println("⚠️ Linha detectada! Recuando...");
+  // ---- PRINTS DOS SENSORES ----
+  Serial.print("Distância: "); Serial.print(dist); Serial.print(" cm | ");
+  Serial.print("QRE E: "); Serial.print(valE); Serial.print(" | ");
+  Serial.print("QRE D: "); Serial.println(valD);
+
+  // ---- FUGA DA BORDA ----
+  if (linhaE || linhaD) {
+    Serial.println("⚠️ LINHA DETECTADA! Recuando...");
+
     re(vel_re);
-    delay(400);
-    if (foraE && !foraD) girarDireita(vel_re);
-    else if (foraD && !foraE) girarEsquerda(vel_re);
-    else girarDireita(vel_re);
-    delay(400);
+    delay(300);
+
+    if (linhaE && !linhaD) {
+      Serial.println("Virando para a direita...");
+      girarDireita(vel_re);
+      delay(350);
+    }
+    else if (linhaD && !linhaE) {
+      Serial.println("Virando para a esquerda...");
+      girarEsquerda(vel_re);
+      delay(350);
+    }
+    else {  
+      Serial.println("Linha nos dois sensores — virando direita");
+      girarDireita(vel_re);
+      delay(350);
+    }
+
     parar();
-    delay(100);
+    delay(80);
     return;
   }
 
-  // --- Ataque se o inimigo estiver próximo ---
-  if (dist > 0 && dist <= distancia_max) {
-    Serial.print("🎯 Inimigo a ");
+  // ---- ATAQUE ----
+  if (dist > 0 && dist <= distancia_ataque) {
+    Serial.print("🎯 ATAQUE! Inimigo a ");
     Serial.print(dist);
     Serial.println(" cm!");
     frente(vel_max);
-    delay(150);
     return;
   }
 
-  // --- Procurar o inimigo ---
+  // ---- BUSCA DO INIMIGO ----
+  if (dist > distancia_ataque && dist <= distancia_max) {
+    Serial.println("➡ Inimigo detectado longe — avançando devagar...");
+    frente(vel_min);
+    return;
+  }
+
   Serial.println("🔍 Procurando inimigo...");
   girarDireita(vel_min);
-  delay(300);
-  parar();
+  delay(200);
 }
 
 // ==============================
 // Setup
 // ==============================
+
 void setup() {
   Serial.begin(9600);
 
@@ -150,23 +172,20 @@ void setup() {
   pinMode(trig, OUTPUT);
   pinMode(echo, INPUT);
 
-  pinMode(sensorE, INPUT);
-  pinMode(sensorD, INPUT);
-
   pinMode(motorA_frente, OUTPUT);
   pinMode(motorA_tras, OUTPUT);
   pinMode(motorB_frente, OUTPUT);
   pinMode(motorB_tras, OUTPUT);
 
   parar();
-  Serial.println("✅ Pronto! Aperte o botão para começar...");
+  Serial.println("✅ Pronto! Aperte o botão para iniciar...");
 }
 
 // ==============================
 // Loop principal
 // ==============================
+
 void loop() {
-  // Espera o botão
   if (!combateAtivo && digitalRead(botao) == LOW) {
     Serial.println("🕒 Botão pressionado! Iniciando em 3 segundos...");
     parar();
@@ -177,13 +196,12 @@ void loop() {
       delay(1000);
     }
 
-    Serial.println("🚀 Combate iniciado!");
+    Serial.println("🚀 COMBATE INICIADO!");
     combateAtivo = true;
   }
 
-  // Se estiver em combate, executa comportamento
   if (combateAtivo) comportamento();
   else parar();
 
-  delay(50);
+  delay(40);
 }
