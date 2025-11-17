@@ -25,7 +25,7 @@ int distancia_ataque = 30;   // Inimigo perto
 int distancia_max = 80;      // Máximo de busca
 int vel_max = 255;
 int vel_min = 140;
-int vel_re = 180;
+int vel_re = 140;
 
 bool combateAtivo = false;
 
