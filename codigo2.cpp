@@ -130,7 +130,7 @@ void comportamento() {
 
   // ---- Ataque ----
   if (dist > 0 && dist <= distancia_ataque) {
-    Serial.println("🔥 ATAQUE MÁXIMO!");
+    Serial.println("ATAQUE MÁXIMO!");
     frente(vel_max);
     return;
   }
@@ -143,7 +143,7 @@ void comportamento() {
   }
 
   // ---- Busca Inteligente (180°) ----
-  Serial.println("🔍 Procurando inimigo... busca 180°");
+  Serial.println("Procurando inimigo... busca 180°");
 
   if (!buscaLado) {  
     girarEsquerda(vel_min);        // DIREITA
@@ -173,7 +173,7 @@ void setup() {
   pinMode(motorB_frente, OUTPUT);
   pinMode(motorB_tras, OUTPUT);
   parar();
-  Serial.println("Ready. Press button.");
+  Serial.println("Pronto. Precione o botão");
 }
 
 // ==============================
@@ -182,9 +182,9 @@ void setup() {
 
 void loop() {
   if (!combateAtivo && digitalRead(botao) == LOW) {
-    Serial.println("Start in 3...");
+    Serial.println("Start em 3...");
     delay(3000);
-    Serial.println("GO!");
+    Serial.println("Vai!");
     combateAtivo = true;
   }
 
