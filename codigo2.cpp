@@ -85,7 +85,9 @@ int lerDistancia() {
 
 int lerQRE(int pino) {
   long soma = 0;
-  for (int i = 0; i < 5; i++) { soma += analogRead(pino); delay(2); }
+  for (int i = 0; i < 5; i++) { 
+    soma += analogRead(pino); delay(2); 
+  }
   return soma / 5;
 }
 
